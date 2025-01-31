@@ -1,0 +1,6 @@
+@WayTogether_V_0._1.Server_HostAddress = http://localhost:5041
+
+GET {{WayTogether_V_0._1.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
