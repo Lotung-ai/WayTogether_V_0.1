@@ -1,23 +1,29 @@
 // waytogether_v_0.1.client/src/pages/Itineraries/ItineraryCreate.jsx
-import React, { useState } from "react";
-import GoogleMap from "../../mapComponents/Map";
-import Markers from "../../mapComponents/MarkerMap";
-import Routes from "../../mapComponents/Directions";
+import React, { useState } from 'react';
+import GoogleMapLoader from '../../mapComponents/GoogleMapLoader';
+import GoogleMap from '../../mapComponents/Map';
+import AdvancedMarkers from '../../mapComponents/MarkerMap';
+import Routes from '../../mapComponents/Directions';
 
 const ItineraryCreate = () => {
-    const [markers, setMarkers] = useState([]);
-    const [directions, setDirections] = useState(null);
+    const [markers, setMarkers] = useState([]); // État pour les marqueurs
+    const [directions, setDirections] = useState(null); // État pour les directions
 
+    // Gestionnaire d'événements pour les clics sur la carte
     const handleMapClick = (event) => {
         const newMarker = {
             position: {
                 lat: event.latLng.lat(),
                 lng: event.latLng.lng(),
             },
+            title: 'New Marker',
+            description: 'Description of the marker',
+            map: window.google.maps.Map,
         };
         setMarkers((prevMarkers) => [...prevMarkers, newMarker]);
     };
 
+    // Fonction pour calculer l'itinéraire
     const calculateRoute = () => {
         if (markers.length < 2) return;
 
@@ -47,9 +53,14 @@ const ItineraryCreate = () => {
     return (
         <div>
             <h1>Créer un itinéraire</h1>
-            <GoogleMap onClick={handleMapClick} />
-            <Markers markers={markers} />
-            <Routes directions={directions} />
+            <GoogleMapLoader
+                apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
+                onLoad={() => console.log('Google Maps API loaded')}
+            />
+            <GoogleMap onClick={handleMapClick}>
+                <AdvancedMarkers markers={markers} />
+                <Routes directions={directions} />
+            </GoogleMap>
             <button onClick={calculateRoute}>Calculer l'itinéraire</button>
         </div>
     );
