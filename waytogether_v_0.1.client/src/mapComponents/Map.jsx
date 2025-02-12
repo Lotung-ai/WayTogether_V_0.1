@@ -1,48 +1,66 @@
 // waytogether_v_0.1.client/src/mapComponents/Map.jsx
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from 'react';
 
-const GoogleMap = ({ onClick }) => {
-    const mapRef = useRef(null); // Référence pour le conteneur de la carte
-    const mapInstance = useRef(null); // Référence pour l'instance de la carte
+const GoogleMap = ({ apiKey, onLoad, onClick, children }) => {
+    const [map, setMap] = useState(null);
+    const [isMapLoaded, setIsMapLoaded] = useState(false);
 
     useEffect(() => {
-        const googleMapsMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+        if (isMapLoaded) return;
 
-        // Logs pour vérifier les valeurs des clés
-        console.log("ID de la carte Google Maps:", googleMapsMapId);
-
-        const initializeMap = () => {
-            // Initialiser la carte si elle n'est pas déjà initialisée et si l'objet google.maps est disponible
-            if (!mapInstance.current && window.google && window.google.maps) {
-                mapInstance.current = new google.maps.Map(mapRef.current, {
-                    center: { lat: -34.397, lng: 150.644 }, // Centre initial de la carte
-                    zoom: 8, // Niveau de zoom initial
-                    mapId: googleMapsMapId, // Utilisation de l'ID de la carte
-                });
-                console.log("Carte Google Maps initialisée");
-
-                // Ajouter un écouteur d'événements pour les clics sur la carte
-                mapInstance.current.addListener("click", (event) => {
-                    console.log("Carte cliquée aux coordonnées:", event.latLng.lat(), event.latLng.lng());
-                    onClick(event);
-                });
-            }
+        // Définir la fonction de rappel pour l'initialisation de la carte
+        window.initMap = () => {
+            const mapOptions = {
+                center: { lat: -34.397, lng: 150.644 },
+                zoom: 8,
+                mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID, // Remplacez 'YOUR_MAP_ID' par votre ID de carte valide
+            };
+            const mapElement = document.getElementById('map');
+            const googleMap = new window.google.maps.Map(mapElement, mapOptions);
+            setMap(googleMap);
+            setIsMapLoaded(true);
+            if (onLoad) onLoad(googleMap);
         };
 
-        // Vérifier si l'objet google.maps est disponible, sinon réessayer périodiquement
-        if (window.google && window.google.maps) {
-            initializeMap();
+        // Vérifier si l'objet google n'est pas déjà chargé
+        if (!window.google) {
+            // Vérifier si le script Google Maps n'a pas déjà été chargé
+            if (!window.googleMapsScriptLoaded) {
+                // Créer un élément script pour charger l'API Google Maps
+                const script = document.createElement('script');
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker&callback=initMap`;
+                script.async = true;
+                script.defer = true;
+                script.onload = () => {
+                    window.googleMapsScriptLoaded = true;
+                };
+                // Ajouter le script à l'en-tête du document
+                document.head.appendChild(script);
+            } else {
+                // Si le script est déjà chargé, appeler la fonction de rappel
+                window.initMap();
+            }
         } else {
-            const intervalId = setInterval(() => {
-                if (window.google && window.google.maps) {
-                    clearInterval(intervalId);
-                    initializeMap();
-                }
-            }, 100);
+            // Si l'objet google est déjà chargé, appeler la fonction de rappel
+            window.initMap();
         }
-    }, [onClick]);
+    }, [apiKey, onLoad, isMapLoaded]);
 
-    return <div ref={mapRef} style={{ width: "100%", height: "400px" }} />; // Conteneur de la carte
+    useEffect(() => {
+        if (map && onClick) {
+            map.addListener('click', onClick);
+        }
+    }, [map, onClick]);
+
+    return (
+        <div>
+            <div id="map" style={{ height: '500px', width: '100%' }}></div>
+            {children}
+        </div>
+    );
 };
 
 export default GoogleMap;
+
+
+

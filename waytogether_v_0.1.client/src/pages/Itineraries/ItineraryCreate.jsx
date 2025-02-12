@@ -1,13 +1,13 @@
 // waytogether_v_0.1.client/src/pages/Itineraries/ItineraryCreate.jsx
 import React, { useState } from 'react';
-import GoogleMapLoader from '../../mapComponents/GoogleMapLoader';
 import GoogleMap from '../../mapComponents/Map';
-import AdvancedMarkers from '../../mapComponents/MarkerMap';
+import AdvancedMarkerManager from '../../mapComponents/MarkerMap';
 import Routes from '../../mapComponents/Directions';
 
 const ItineraryCreate = () => {
     const [markers, setMarkers] = useState([]); // État pour les marqueurs
     const [directions, setDirections] = useState(null); // État pour les directions
+    const [map, setMap] = useState(null); // État pour la carte
 
     // Gestionnaire d'événements pour les clics sur la carte
     const handleMapClick = (event) => {
@@ -18,7 +18,6 @@ const ItineraryCreate = () => {
             },
             title: 'New Marker',
             description: 'Description of the marker',
-            map: window.google.maps.Map,
         };
         setMarkers((prevMarkers) => [...prevMarkers, newMarker]);
     };
@@ -27,7 +26,7 @@ const ItineraryCreate = () => {
     const calculateRoute = () => {
         if (markers.length < 2) return;
 
-        const directionsService = new google.maps.DirectionsService();
+        const directionsService = new window.google.maps.DirectionsService();
         const waypoints = markers.slice(1, -1).map((marker) => ({
             location: marker.position,
             stopover: true,
@@ -38,10 +37,10 @@ const ItineraryCreate = () => {
                 origin: markers[0].position,
                 destination: markers[markers.length - 1].position,
                 waypoints,
-                travelMode: google.maps.TravelMode.DRIVING,
+                travelMode: window.google.maps.TravelMode.DRIVING,
             },
             (result, status) => {
-                if (status === google.maps.DirectionsStatus.OK) {
+                if (status === window.google.maps.DirectionsStatus.OK) {
                     setDirections(result);
                 } else {
                     console.error(`Erreur lors du calcul de l'itinéraire : ${status}`);
@@ -53,12 +52,15 @@ const ItineraryCreate = () => {
     return (
         <div>
             <h1>Créer un itinéraire</h1>
-            <GoogleMapLoader
+            <GoogleMap
                 apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
-                onLoad={() => console.log('Google Maps API loaded')}
-            />
-            <GoogleMap onClick={handleMapClick}>
-                <AdvancedMarkers markers={markers} />
+                onLoad={(googleMap) => {
+                    console.log('Google Maps API loaded');
+                    setMap(googleMap);
+                }}
+                onClick={handleMapClick}
+            >
+                <AdvancedMarkerManager map={map} markers={markers} />
                 <Routes directions={directions} />
             </GoogleMap>
             <button onClick={calculateRoute}>Calculer l'itinéraire</button>
@@ -67,3 +69,6 @@ const ItineraryCreate = () => {
 };
 
 export default ItineraryCreate;
+
+
+
