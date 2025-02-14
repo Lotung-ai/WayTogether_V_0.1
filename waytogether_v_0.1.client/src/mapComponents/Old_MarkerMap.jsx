@@ -1,144 +1,135 @@
-import React, { useEffect, useRef, useState } from 'react';
-import './../css/marker.css';  // Importer le fichier CSS sans des accolades
+import React, { useEffect, useRef } from 'react';
 
-const MarkerMap = ({ map, setMarkers }) => {
-    const [markers, setInternalMarkers] = useState([]);
-    const prevMarkers = useRef(markers);
+const AdvancedMarkerManager = ({ map, markers, setMarkers }) => {
+    const geocoderRef = useRef(null);
+    const markerInstances = useRef([]); // Référence pour suivre les instances des marqueurs
+    const geocodedMarkersRef = useRef(new Set()); // Référence pour suivre les marqueurs géocodés
 
-    // Effet pour vider localStorage au chargement de la page
-    useEffect(() => {
-        console.log('[MarkerMap] Vider localStorage au chargement de la page');
-
-        // Vider localStorage
-        localStorage.removeItem('markers');  // Supprimer uniquement la clé 'markers'
-
-        console.log('[MarkerMap] localStorage vidé');
-    }, []);  // Ce useEffect s'exécute uniquement au premier rendu du composant
-
-    // Chargement des marqueurs depuis localStorage, uniquement si nécessaire
-    useEffect(() => {
-        console.log('[MarkerMap] Début du useEffect pour charger les marqueurs depuis localStorage');
-
-        // Si la carte n'est pas encore initialisée, on ne fait rien
-        if (!map) return;
-
-        // Récupérer les marqueurs depuis localStorage
-        const storedMarkers = JSON.parse(localStorage.getItem('markers'));
-        if (storedMarkers && storedMarkers.length > 0) {
-            console.log('[MarkerMap] Markers chargés depuis localStorage :', storedMarkers);
-
-            // Ne mettre à jour les marqueurs que si le contenu change
-            if (JSON.stringify(storedMarkers) !== JSON.stringify(markers)) {
-                setInternalMarkers(storedMarkers);
-                setMarkers(storedMarkers);
-            }
-        }
-
-        console.log('[MarkerMap] Fin du useEffect pour charger les marqueurs');
-    }, [map]);  // Ne déclenche cette fonction que si la carte change
-
-    // Fonction pour récupérer les informations de l'adresse et du nom du lieu via l'API Google Maps
-    const getPlaceDetails = (latLng) => {
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ location: latLng }, (results, status) => {
-            if (status === window.google.maps.GeocoderStatus.OK && results[0]) {
-                const placeName = results[0].formatted_address; // Nom du lieu
-                const address = results[0].address_components
-                    .filter(component => component.types.includes('street_address') || component.types.includes('locality'))
-                    .map(component => component.long_name)
-                    .join(', '); // Filtrer et formater l'adresse
-
-                // Ajouter les informations de l'adresse et du lieu au marqueur
-                const newMarker = {
-                    position: latLng,
-                    title: `Marker ${markers.length + 1}`, // Titre par défaut
-                    placeName,
-                    address
-                };
-
-                setInternalMarkers((prevMarkers) => {
-                    const updatedMarkers = [...prevMarkers, newMarker];
-                    setMarkers(updatedMarkers); // Passer les marqueurs à l'état parent
-                    return updatedMarkers.map((marker, index) => ({
-                        ...marker,
-                        title: `Marker ${index + 1}`,
-                    }));
+    // Fonction de géocodage utilisant Promise
+    const geocodePosition = (position) => {
+        return new Promise((resolve, reject) => {
+            if (geocoderRef.current) {
+                geocoderRef.current.geocode({ location: position }, (results, status) => {
+                    if (status === window.google.maps.GeocoderStatus.OK && results[0]) {
+                        resolve(results[0].formatted_address);
+                    } else {
+                        reject(`Géocodage échoué avec le statut : ${status}`);
+                    }
                 });
             } else {
-                console.error('Erreur lors de la récupération des détails du lieu:', status);
+                reject("Geocoder non initialisé.");
             }
         });
     };
 
-    // Effet pour gérer les marqueurs (création, nettoyage et affichage)
     useEffect(() => {
-        console.log('[MarkerMap] Début du useEffect pour les marqueurs');
+        // Initialisation du geocoder
+        if (window.google && window.google.maps && !geocoderRef.current) {
+            geocoderRef.current = new window.google.maps.Geocoder();
+            console.log('Geocoder initialisé.');
+        }
+    }, []);
 
-        // Si la carte n'est pas encore initialisée, on ne fait rien
-        if (!map) return;
+    useEffect(() => {
+        const initializeMarkers = async () => {
+            if (window.google && window.google.maps && map) {
+                // Supprimer les anciens marqueurs
+                console.log('Suppression des anciens marqueurs...');
+                markerInstances.current.forEach(marker => marker.map = null);
+                markerInstances.current = [];
+                console.log('Marqueurs existants après suppression :', markerInstances.current);
 
-        console.log('[MarkerMap] La carte est initialisée.', map);
+                console.log('Markers avant géocodage :', markers);
 
-        // Nettoyer les anciens marqueurs
-        if (map.markers) {
-            console.log('[MarkerMap] Nettoyage des anciens marqueurs');
-            map.markers.forEach(marker => marker.setMap(null));  // Enlever les marqueurs précédents
+                for (let index = 0; index < markers.length; index++) {
+                    const marker = markers[index];
+
+                    // Vérification de la disponibilité d'AdvancedMarkerElement
+                    if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
+                        // Vérifier si le marqueur a déjà été géocodé
+                        if (geocodedMarkersRef.current.has(index)) {
+                            console.log(`Marqueur ${index} déjà géocodé. Ignorer.`);
+                            continue;
+                        }
+
+                        // Création d'un élément HTML pour le contenu du marqueur
+                        const markerElement = document.createElement('div');
+                        markerElement.innerHTML = `
+                            <div style="background-color: white; padding: 5px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.3);">
+                                <h4 style="margin: 0;">Marker ${index + 1}</h4>
+                            </div>
+                        `;
+
+                        // Géocodage du marqueur
+                        if (marker.position) {
+                            try {
+                                console.log(`Géocodage du marqueur ${index} en cours...`);
+                                const address = await geocodePosition(marker.position);
+
+                                const updatedMarker = {
+                                    ...marker,
+                                    address,
+                                    title: `Marker ${index + 1} - ${address}`,
+                                    placeName: address,
+                                };
+
+                                console.log(`Marqueur ${index} géocodé avec succès :`, updatedMarker);
+
+                                // Mise à jour de l'état des marqueurs
+                                setMarkers((prevMarkers) => {
+                                    const updatedMarkers = prevMarkers.map((m, i) =>
+                                        i === index ? updatedMarker : m
+                                    );
+                                    console.log('Markers après mise à jour :', updatedMarkers);
+                                    return updatedMarkers;
+                                });
+
+                                // Mise à jour du contenu du marqueur avec l'adresse géocodée
+                                markerElement.innerHTML = `
+                                    <div style="background-color: white; padding: 5px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.3);">
+                                        <h4 style="margin: 0;">Marker ${index + 1} - ${updatedMarker.placeName}</h4>
+                                        <p>${updatedMarker.address}</p>
+                                    </div>
+                                `;
+
+                                // Marquer ce marqueur comme géocodé pour éviter les doublons
+                                geocodedMarkersRef.current.add(index);
+                                console.log(`Marqueur ${index} ajouté à geocodedMarkersRef.`);
+                            } catch (error) {
+                                console.error(`Erreur de géocodage pour le marqueur ${index}:`, error);
+                            }
+                        } else {
+                            console.warn(`Aucune position trouvée pour le marqueur ${index}.`);
+                        }
+
+                        // Création du AdvancedMarkerElement
+                        const advancedMarker = new window.google.maps.marker.AdvancedMarkerElement({
+                            map: map,
+                            position: marker.position,
+                            content: markerElement,
+                        });
+
+                        markerInstances.current.push(advancedMarker);
+                        console.log(`Marqueur ${index} ajouté à la carte :`, advancedMarker);
+                    } else {
+                        console.error('AdvancedMarkerElement is not available.');
+                    }
+                }
+
+                console.log('Tableau des instances de marqueurs après traitement :', markerInstances.current);
+                console.log('Set des marqueurs géocodés :', geocodedMarkersRef.current);
+            }
+        };
+
+        if (map && markers.length > 0) {
+            console.log('Initialisation des marqueurs...');
+            initializeMarkers();
         } else {
-            map.markers = [];
+            console.log('Aucun marqueur à initialiser ou map non disponible.');
         }
-
-        // Créer de nouveaux marqueurs uniquement si nécessaire
-        markers.forEach((markerData, index) => {
-            const markerContent = document.createElement('div');
-            markerContent.innerHTML = `
-                <div class="custom-marker">
-                    <span class="marker-label">${index + 1}</span>
-                </div>
-            `;
-
-            const advancedMarker = new window.google.maps.marker.AdvancedMarkerElement({
-                position: markerData.position,
-                map: map,
-                content: markerContent,
-                title: markerData.title,
-            });
-
-            // Ajouter un listener au marker pour afficher une InfoWindow lors du clic
-            advancedMarker.addListener('click', () => {
-                const infoWindow = new window.google.maps.InfoWindow({
-                    content: `<h3>${markerData.placeName || markerData.title}</h3><p>${markerData.address || 'Adresse non disponible'}</p>`,
-                });
-                infoWindow.open(map, advancedMarker);
-            });
-
-            map.markers.push(advancedMarker);
-        });
-
-        // Sauvegarder les nouveaux marqueurs dans localStorage si nécessaire
-        if (markers.length > 0) {
-            console.log('[MarkerMap] Sauvegarde des marqueurs dans localStorage:', markers);
-            localStorage.setItem('markers', JSON.stringify(markers));
-        }
-
-        console.log('[MarkerMap] Fin du useEffect pour les marqueurs');
-    }, [map, markers]);  // Ne déclenche cette fonction que si la carte ou les marqueurs changent
-
-    // Gestion du clic sur la carte pour ajouter un marqueur
-    const handleMapClick = (event) => {
-        const latLng = event.latLng;
-
-        // Récupérer les informations de l'adresse et du nom du lieu
-        getPlaceDetails(latLng);
-    };
-
-    // Ajouter le gestionnaire de clic à la carte après son chargement
-    useEffect(() => {
-        if (map) {
-            map.addListener('click', handleMapClick);
-        }
-    }, [map]);
+    }, [map, markers, setMarkers]); // Dépendances limitées
 
     return null;
 };
 
-export default MarkerMap;
+export default AdvancedMarkerManager;

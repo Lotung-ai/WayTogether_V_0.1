@@ -1,135 +1,144 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import './../css/marker.css';
 
-const AdvancedMarkerManager = ({ map, markers, setMarkers }) => {
-    const geocoderRef = useRef(null);
-    const markerInstances = useRef([]); // Référence pour suivre les instances des marqueurs
-    const geocodedMarkersRef = useRef(new Set()); // Référence pour suivre les marqueurs géocodés
+const MarkerMap = ({ map, setMarkers }) => {
+    const [markers, setInternalMarkers] = useState([]); // Internal state
+    const prevMarkers = useRef(markers); // Previous markers to compare
+    const [geocodeCache, setGeocodeCache] = useState({}); // Cache for geocoding results
 
-    // Fonction de géocodage utilisant Promise
-    const geocodePosition = (position) => {
-        return new Promise((resolve, reject) => {
-            if (geocoderRef.current) {
-                geocoderRef.current.geocode({ location: position }, (results, status) => {
-                    if (status === window.google.maps.GeocoderStatus.OK && results[0]) {
-                        resolve(results[0].formatted_address);
-                    } else {
-                        reject(`Géocodage échoué avec le statut : ${status}`);
-                    }
-                });
+    // Clear localStorage on page load
+    useEffect(() => {
+        console.log('[MarkerMap] Clear localStorage on page load');
+        localStorage.removeItem('markers');
+    }, []);
+
+    // Load markers from localStorage
+    useEffect(() => {
+        console.log('[MarkerMap] Loading markers from localStorage');
+        if (!map) return;
+
+        const storedMarkers = JSON.parse(localStorage.getItem('markers')) || [];
+        if (Array.isArray(storedMarkers) && storedMarkers.length > 0) {
+            console.log('[MarkerMap] Markers loaded from localStorage:', storedMarkers);
+            setInternalMarkers(storedMarkers); // Update internal state
+        } else {
+            console.log('[MarkerMap] Aucun marqueur trouvé dans localStorage.');
+        }
+    }, [map]);
+
+    // Use geocode cache
+    const getPlaceDetails = (latLng) => {
+        const latLngKey = `${latLng.lat()},${latLng.lng()}`; // Unique key for each latLng
+
+        // Check if data is in cache
+        if (geocodeCache[latLngKey]) {
+            console.log('[MarkerMap] Data retrieved from cache');
+            updateMarkerWithPlaceDetails(latLng, geocodeCache[latLngKey]);
+            return;
+        }
+
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: latLng }, (results, status) => {
+            if (status === window.google.maps.GeocoderStatus.OK && results[0]) {
+                // Correction de l'inversion
+                const placeName = results[0].address_components
+                    .filter(component => component.types.includes('locality') || component.types.includes('sublocality') || component.types.includes('administrative_area_level_1'))
+                    .map(component => component.long_name)
+                    .join(', ');
+
+                const address = results[0].formatted_address;
+
+                console.log(`[MarkerMap] getPlaceDetails - Place Name: ${placeName}, Address: ${address}`);
+
+                // Cache the results
+                const placeDetails = { placeName, address };
+                setGeocodeCache(prevCache => ({ ...prevCache, [latLngKey]: placeDetails }));
+
+                updateMarkerWithPlaceDetails(latLng, placeDetails);
             } else {
-                reject("Geocoder non initialisé.");
+                console.error('[MarkerMap] Error retrieving place details:', status);
             }
         });
     };
 
+    // Update marker with place details
+    const updateMarkerWithPlaceDetails = (latLng, placeDetails) => {
+        setInternalMarkers(prevMarkers => {
+            const newMarker = {
+                position: {
+                    lat: latLng.lat(),
+                    lng: latLng.lng()
+                },
+                title: `Marker ${prevMarkers.length + 1}`, // Utilisation de prevMarkers.length pour l'incrémentation
+                placeName: placeDetails.placeName,
+                address: placeDetails.address,
+            };
+
+            const updatedMarkers = [...prevMarkers, newMarker];
+            // Save the updated markers to localStorage
+            localStorage.setItem('markers', JSON.stringify(updatedMarkers));
+            console.log('[MarkerMap] Saving markers to localStorage:', updatedMarkers);
+            return updatedMarkers;
+        });
+    };
+
+
+    // Update markers in the parent component (only when necessary)
     useEffect(() => {
-        // Initialisation du geocoder
-        if (window.google && window.google.maps && !geocoderRef.current) {
-            geocoderRef.current = new window.google.maps.Geocoder();
-            console.log('Geocoder initialisé.');
+        // Compare with previous markers to avoid unnecessary updates
+        if (JSON.stringify(prevMarkers.current) !== JSON.stringify(markers)) {
+            console.log('[MarkerMap] Saving markers to parent:', markers);
+            setMarkers(markers); // Update the parent state
+            prevMarkers.current = markers; // Update the reference
         }
-    }, []);
+    }, [markers, setMarkers]);
 
+    // Add markers to the map
     useEffect(() => {
-        const initializeMarkers = async () => {
-            if (window.google && window.google.maps && map) {
-                // Supprimer les anciens marqueurs
-                console.log('Suppression des anciens marqueurs...');
-                markerInstances.current.forEach(marker => marker.map = null);
-                markerInstances.current = [];
-                console.log('Marqueurs existants après suppression :', markerInstances.current);
+        if (!map) return;
 
-                console.log('Markers avant géocodage :', markers);
-
-                for (let index = 0; index < markers.length; index++) {
-                    const marker = markers[index];
-
-                    // Vérification de la disponibilité d'AdvancedMarkerElement
-                    if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
-                        // Vérifier si le marqueur a déjà été géocodé
-                        if (geocodedMarkersRef.current.has(index)) {
-                            console.log(`Marqueur ${index} déjà géocodé. Ignorer.`);
-                            continue;
-                        }
-
-                        // Création d'un élément HTML pour le contenu du marqueur
-                        const markerElement = document.createElement('div');
-                        markerElement.innerHTML = `
-                            <div style="background-color: white; padding: 5px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.3);">
-                                <h4 style="margin: 0;">Marker ${index + 1}</h4>
-                            </div>
-                        `;
-
-                        // Géocodage du marqueur
-                        if (marker.position) {
-                            try {
-                                console.log(`Géocodage du marqueur ${index} en cours...`);
-                                const address = await geocodePosition(marker.position);
-
-                                const updatedMarker = {
-                                    ...marker,
-                                    address,
-                                    title: `Marker ${index + 1} - ${address}`,
-                                    placeName: address,
-                                };
-
-                                console.log(`Marqueur ${index} géocodé avec succès :`, updatedMarker);
-
-                                // Mise à jour de l'état des marqueurs
-                                setMarkers((prevMarkers) => {
-                                    const updatedMarkers = prevMarkers.map((m, i) =>
-                                        i === index ? updatedMarker : m
-                                    );
-                                    console.log('Markers après mise à jour :', updatedMarkers);
-                                    return updatedMarkers;
-                                });
-
-                                // Mise à jour du contenu du marqueur avec l'adresse géocodée
-                                markerElement.innerHTML = `
-                                    <div style="background-color: white; padding: 5px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.3);">
-                                        <h4 style="margin: 0;">Marker ${index + 1} - ${updatedMarker.placeName}</h4>
-                                        <p>${updatedMarker.address}</p>
-                                    </div>
-                                `;
-
-                                // Marquer ce marqueur comme géocodé pour éviter les doublons
-                                geocodedMarkersRef.current.add(index);
-                                console.log(`Marqueur ${index} ajouté à geocodedMarkersRef.`);
-                            } catch (error) {
-                                console.error(`Erreur de géocodage pour le marqueur ${index}:`, error);
-                            }
-                        } else {
-                            console.warn(`Aucune position trouvée pour le marqueur ${index}.`);
-                        }
-
-                        // Création du AdvancedMarkerElement
-                        const advancedMarker = new window.google.maps.marker.AdvancedMarkerElement({
-                            map: map,
-                            position: marker.position,
-                            content: markerElement,
-                        });
-
-                        markerInstances.current.push(advancedMarker);
-                        console.log(`Marqueur ${index} ajouté à la carte :`, advancedMarker);
-                    } else {
-                        console.error('AdvancedMarkerElement is not available.');
-                    }
-                }
-
-                console.log('Tableau des instances de marqueurs après traitement :', markerInstances.current);
-                console.log('Set des marqueurs géocodés :', geocodedMarkersRef.current);
-            }
-        };
-
-        if (map && markers.length > 0) {
-            console.log('Initialisation des marqueurs...');
-            initializeMarkers();
+        // Clean up existing markers on the map
+        if (map.markers) {
+            console.log('[MarkerMap] Cleaning up old markers');
+            map.markers.forEach(marker => marker.setMap(null));
         } else {
-            console.log('Aucun marqueur à initialiser ou map non disponible.');
+            map.markers = [];
         }
-    }, [map, markers, setMarkers]); // Dépendances limitées
+
+        markers.forEach((markerData, index) => {
+            const markerContent = document.createElement('div');
+            markerContent.innerHTML = `<div class="custom-marker"><span class="marker-label">${index + 1}</span></div>`;
+            const advancedMarker = new window.google.maps.marker.AdvancedMarkerElement({
+                position: markerData.position,
+                map: map,
+                content: markerContent,
+                title: markerData.title,
+            });
+
+            advancedMarker.addListener('click', () => {
+                const infoWindow = new window.google.maps.InfoWindow({
+                    content: `<h3>${markerData.placeName || markerData.title}</h3><p>${markerData.address || 'Adresse non disponible'}</p>`,
+                });
+                infoWindow.open(map, advancedMarker);
+            });
+
+            map.markers.push(advancedMarker);
+        });
+    }, [map, markers]);
+
+    // Handle click on the map
+    const handleMapClick = (event) => {
+        const latLng = event.latLng;
+        getPlaceDetails(latLng);
+    };
+
+    useEffect(() => {
+        if (map) {
+            map.addListener('click', handleMapClick);
+        }
+    }, [map]);
 
     return null;
 };
 
-export default AdvancedMarkerManager;
+export default MarkerMap;
