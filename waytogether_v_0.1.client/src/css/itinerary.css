@@ -1,0 +1,43 @@
+/* Container général de la page */
+.itinerary-container {
+    padding: 20px;
+    font-family: Arial, sans-serif;
+}
+
+/* Section regroupant les informations */
+.info-sections {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+/* Carte d'information pour chaque section */
+.info-card {
+    flex: 1;
+    min-width: 300px;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #fafafa;
+}
+
+    /* Style de la liste des marqueurs */
+    .info-card ol {
+        padding-left: 20px;
+        list-style: decimal;
+    }
+
+    .info-card li {
+        margin-bottom: 10px;
+    }
+
+    /* Style pour les labels de segment */
+    .info-card label {
+        font-weight: bold;
+    }
+
+    /* Style pour les informations supplémentaires */
+    .info-card small {
+        color: #555;
+    }
