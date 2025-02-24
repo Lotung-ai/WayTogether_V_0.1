@@ -3,42 +3,34 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 const ItineraryContext = createContext();
 
 export const ItineraryProvider = ({ children }) => {
+    const [map, setMap] = useState(null);
     const [markers, setMarkers] = useState([]);
     const [segmentTravelModes, setSegmentTravelModes] = useState([]);
+    const [segmentData, setSegmentData] = useState([]);
     const [travelTimes, setTravelTimes] = useState({ segments: [], total: 0 });
 
-    // Clear localStorage on page load
     useEffect(() => {
         console.log('[ItineraryContext] Clear localStorage on page load');
         localStorage.removeItem('markers');
     }, []);
 
-    // Fonction pour récupérer les marqueurs stockés
-    const loadStoredMarkers = () => {
+    useEffect(() => {
         const storedMarkers = JSON.parse(localStorage.getItem('markers')) || [];
         if (storedMarkers.length > 0) {
             setMarkers(storedMarkers);
         }
-    };
-
-    // Récupération des marqueurs une seule fois au montage du composant
-    useEffect(() => {
-        loadStoredMarkers();
     }, []);
 
-    // Initialisation de segmentTravelModes une seule fois après que markers est défini
     useEffect(() => {
         if (markers.length > 1 && segmentTravelModes.length === 0) {
             setSegmentTravelModes(Array(markers.length - 1).fill('DRIVING'));
         }
-    }, [markers, segmentTravelModes]);
+    }, [markers]);
 
-    // Mettre à jour les marqueurs et segmentTravelModes de manière cohérente
     const updateMarkers = useCallback((updatedMarkers) => {
         setMarkers(updatedMarkers);
         localStorage.setItem('markers', JSON.stringify(updatedMarkers));
 
-        // Mettre à jour segmentTravelModes uniquement si nécessaire
         setSegmentTravelModes((prevModes) => {
             const requiredSegments = updatedMarkers.length - 1;
             if (prevModes.length < requiredSegments) {
@@ -47,7 +39,7 @@ export const ItineraryProvider = ({ children }) => {
                 return prevModes.slice(0, requiredSegments);
             }
         });
-    }, []); // `updateMarkers` ne change pas donc on le met dans le tableau de dépendances vide
+    }, []);
 
     const handleMarkerDetailsChange = (index, key, value) => {
         const updatedMarkers = markers.map((marker, i) =>
@@ -62,17 +54,26 @@ export const ItineraryProvider = ({ children }) => {
     };
 
     const handleTravelModeChange = (index, value) => {
-        const updatedModes = [...segmentTravelModes];
-        updatedModes[index] = value;
-        setSegmentTravelModes(updatedModes);
+        setSegmentTravelModes((prevModes) => {
+            const updatedModes = [...prevModes];
+            updatedModes[index] = value;
+            return updatedModes;
+        });
     };
+
+    const updateTravelTimes = useCallback((segments) => {
+        const total = segments.reduce((acc, item) => acc + (item ? item.duration.value : 0), 0);
+        setTravelTimes({ segments, total });
+    }, [setTravelTimes]);
 
     return (
         <ItineraryContext.Provider value={{
+            map,
+            setMap,
             markers,
             segmentTravelModes,
             travelTimes,
-            setTravelTimes,
+            setTravelTimes: updateTravelTimes, // Utilisation du setter optimisé
             handleMarkerDetailsChange,
             handleDeleteMarker,
             handleTravelModeChange,

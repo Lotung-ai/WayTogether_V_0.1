@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useItinerary } from '../context/ItineraryContext'; // Importer le contexte
 
 const GoogleMap = ({ onLoad }) => {
+    const { setMap } = useItinerary(); // Récupérer `setMap` du contexte
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
     const mapRef = useRef(null);
-    const [map, setMap] = useState(null);
     const [isMapLoaded, setIsMapLoaded] = useState(false);
 
     useEffect(() => {
@@ -23,7 +24,7 @@ const GoogleMap = ({ onLoad }) => {
                     mapId: mapId,
                 });
 
-                setMap(googleMap);
+                setMap(googleMap); // Stocker la carte dans le contexte
                 setIsMapLoaded(true);
                 if (onLoad) onLoad(googleMap);
             }
@@ -43,7 +44,7 @@ const GoogleMap = ({ onLoad }) => {
             script.defer = true;
             document.head.appendChild(script);
         }
-    }, [apiKey, mapId, onLoad, isMapLoaded]);
+    }, [apiKey, mapId, onLoad, isMapLoaded, setMap]);
 
     return <div ref={mapRef} id="map" style={{ height: '500px', width: '100%' }} />;
 };

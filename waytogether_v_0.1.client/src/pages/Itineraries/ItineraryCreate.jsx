@@ -7,6 +7,8 @@ import '../../css/itinerary.css';
 
 const ItineraryCreate = () => {
     const {
+        map,
+        setMap,
         markers,
         segmentTravelModes,
         travelTimes,
@@ -16,8 +18,6 @@ const ItineraryCreate = () => {
         handleTravelModeChange,
         updateMarkers,
     } = useItinerary();
-
-    const [map, setMap] = useState(null); // Stocke la carte
 
     // Ajoute un marqueur lorsqu'on clique sur la carte
     const handleMapClick = useCallback((event) => {
@@ -42,6 +42,10 @@ const ItineraryCreate = () => {
         return `${hours}h ${minutes}min`;
     };
 
+    useEffect(() => {
+        console.log("[ItineraryCreate] Composant monté");
+    }, []);
+
     return (
         <div className="itinerary-container">
             <h1>Créer un itinéraire</h1>
@@ -52,7 +56,7 @@ const ItineraryCreate = () => {
             {map && (
                 <>
                     <MarkerMap map={map} />
-                    <Directions map={map} markers={markers} segmentTravelModes={segmentTravelModes} setTravelTimes={setTravelTimes} />
+                    <Directions map={map} />
                 </>
             )}
 

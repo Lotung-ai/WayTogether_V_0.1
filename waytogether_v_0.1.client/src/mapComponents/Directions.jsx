@@ -1,17 +1,17 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
 import DirectionsSegment from '../mapComponents/DirectionSegment';
+import { useItinerary } from '../context/ItineraryContext';
 
-const Directions = ({ map, markers, segmentTravelModes, setTravelTimes }) => {
+const Directions = ({ map }) => {
+    const { markers, segmentTravelModes, setTravelTimes } = useItinerary();
     const [segmentData, setSegmentData] = useState([]);
 
     useEffect(() => {
-        // S'il y a moins de 2 markers, on vide les segments
         if (markers.length < 2) {
             setSegmentData([]);
             return;
         }
         const requiredSegments = markers.length - 1;
-        // Construire un nouveau tableau en gardant les segments existants si possible
         setSegmentData((prev) => {
             const newSegments = [];
             for (let i = 0; i < requiredSegments; i++) {
@@ -21,21 +21,22 @@ const Directions = ({ map, markers, segmentTravelModes, setTravelTimes }) => {
         });
     }, [markers]);
 
-    // Recalculer le temps total à partir des segments et loguer la liste des segments
-    useEffect(() => {
-        console.log("Liste des segments :", segmentData);
-        const total = segmentData.reduce((acc, item) => acc + (item ? item.duration.value : 0), 0);
-        setTravelTimes({ segments: segmentData, total });
-    }, [segmentData, setTravelTimes]);
-
-    // Callback pour mettre à jour les données d'un segment spécifique
     const handleSegmentData = useCallback((index, data) => {
         setSegmentData((prev) => {
             const updated = [...prev];
             updated[index] = data;
             return updated;
         });
+    }, [setSegmentData]);
+
+    useEffect(() => {
+        console.log("[Directions] Composant monté avec", markers.length, "marqueurs");
     }, []);
+
+    useEffect(() => {
+        console.log("[Directions] Mise à jour des segments :", segmentData);
+        setTravelTimes(segmentData);
+    }, [segmentData]);
 
     if (!map || markers.length < 2) return null;
 
@@ -48,7 +49,6 @@ const Directions = ({ map, markers, segmentTravelModes, setTravelTimes }) => {
 
                 return (
                     <DirectionsSegment
-                        // Clé stable basée sur les positions d'origine et de destination
                         key={`${origin.lat}_${origin.lng}_${destination.lat}_${destination.lng}`}
                         map={map}
                         origin={origin}
